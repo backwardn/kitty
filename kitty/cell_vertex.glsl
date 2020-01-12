@@ -162,7 +162,8 @@ void main() {
     float cell_has_cursor = is_cursor(c, r);
     float is_block_cursor = step(float(cursor_fg_sprite_idx), 0.5);
     float cell_has_block_cursor = cell_has_cursor * is_block_cursor;
-    vec3 bg = color_to_vec(resolve_color(colors[bg_index], default_colors[bg_index]));
+    uint bg_as_uint = resolve_color(colors[bg_index], default_colors[bg_index]);
+    vec3 bg = color_to_vec(bg_as_uint);
     // }}}
 
     // Foreground {{{
@@ -200,13 +201,13 @@ void main() {
 
     // Background {{{
 #ifdef NEEDS_BACKROUND
-    float cell_has_non_default_bg = step(ONE, colors[bg_index] & BYTE_MASK);
+    float cell_has_non_default_bg = step(1, float(abs(bg_as_uint - default_colors[bg_index])));
 
 #if defined(BACKGROUND)
     background = bg;
     // draw_bg_bitfield has bit 0 set to draw default bg cells and bit 1 set to draw non-default bg cells
     uint draw_bg_mask = uint(2 * cell_has_non_default_bg + (1 - cell_has_non_default_bg));
-    draw_bg = step(ONE, draw_bg_bitfield & draw_bg_mask);
+    draw_bg = step(1, float(draw_bg_bitfield & draw_bg_mask));
 #endif
 
 #ifdef TRANSPARENT
