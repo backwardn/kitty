@@ -162,8 +162,7 @@ void main() {
     float cell_has_cursor = is_cursor(c, r);
     float is_block_cursor = step(float(cursor_fg_sprite_idx), 0.5);
     float cell_has_block_cursor = cell_has_cursor * is_block_cursor;
-    uint bg_as_uint = resolve_color(colors[bg_index], default_colors[bg_index]);
-    vec3 bg = color_to_vec(bg_as_uint);
+    vec3 bg = color_to_vec(resolve_color(colors[bg_index], default_colors[bg_index]));
     // }}}
 
     // Foreground {{{
@@ -201,11 +200,10 @@ void main() {
 
     // Background {{{
 #ifdef NEEDS_BACKROUND
+    float cell_has_non_default_bg = step(ONE, colors[bg_index] & BYTE_MASK);
 
 #if defined(BACKGROUND)
     background = bg;
-    uint defaultbg = resolve_color(colors[2], default_colors[bg_index]);
-    float cell_has_non_default_bg = abs(defaultbg - bg_as_uint);
     // draw background only if it is either non-default or the draw_default_bg
     // uniform is set
     draw_bg = step(ONE, draw_default_bg + cell_has_non_default_bg);
@@ -218,7 +216,7 @@ void main() {
     // selections/block cursor and 0 everywhere else.
     float is_special_cell = cell_has_block_cursor + float(is_selected & ONE);
 #ifndef SPECIAL
-    is_special_cell += float(colors[bg_index] & BYTE_MASK) + float(is_reversed);
+    is_special_cell += cell_has_non_default_bg + float(is_reversed);
 #endif
     bg_alpha = step(0.5, is_special_cell);
 #ifndef SPECIAL
