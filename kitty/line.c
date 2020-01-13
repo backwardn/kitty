@@ -665,6 +665,69 @@ __eq__(Line *a, Line *b) {
     return a->xnum == b->xnum && memcmp(a->cpu_cells, b->cpu_cells, sizeof(CPUCell) * a->xnum) == 0 && memcmp(a->gpu_cells, b->gpu_cells, sizeof(GPUCell) * a->xnum) == 0;
 }
 
+static inline void
+report_marker_error(PyObject *marker) {
+    if (!PyObject_HasAttrString(marker, "error_reported")) {
+        PyErr_Print();
+        if (PyObject_SetAttrString(marker, "error_reported", Py_True) != 0) PyErr_Clear();
+    } else PyErr_Clear();
+}
+
+static inline void
+apply_marker(PyObject *marker, Line *line, const PyObject *text) {
+    unsigned int l=0, r=0, col=0, match_pos=0;
+    PyObject *pl = PyLong_FromVoidPtr(&l), *pr = PyLong_FromVoidPtr(&r), *pcol = PyLong_FromVoidPtr(&col);
+    if (!pl || !pr || !pcol) { PyErr_Clear(); return; }
+    PyObject *iter = PyObject_CallFunctionObjArgs(marker, text, pl, pr, pcol, NULL);
+    Py_DECREF(pl); Py_DECREF(pr); Py_DECREF(pcol);
+
+    if (iter == NULL) { report_marker_error(marker); return; }
+    PyObject *match;
+    index_type x = 0;
+#define INCREMENT_MATCH_POS { \
+    if (line->cpu_cells[x].ch) { \
+        match_pos++; \
+        for (index_type i = 0; i < arraysz(line->cpu_cells[x].cc_idx); i++) { \
+            if (line->cpu_cells[x].cc_idx[i]) match_pos++; \
+}}}
+
+    while ((match = PyIter_Next(iter)) && x < line->xnum) {
+        Py_DECREF(match);
+        while (match_pos < l && x < line->xnum) {
+            line->gpu_cells[x].attrs &= ATTRS_MASK_WITHOUT_MARK;
+            INCREMENT_MATCH_POS;
+            x++;
+        }
+        attrs_type am = (col & MARK_MASK) << MARK_SHIFT;
+        while(x < line->xnum && match_pos <= r) {
+            line->gpu_cells[x].attrs &= ATTRS_MASK_WITHOUT_MARK;
+            line->gpu_cells[x].attrs |= am;
+            INCREMENT_MATCH_POS;
+            x++;
+        }
+
+    }
+    while(x < line->xnum) line->gpu_cells[x++].attrs &= ATTRS_MASK_WITHOUT_MARK;
+    Py_DECREF(iter);
+    if (PyErr_Occurred()) report_marker_error(marker);
+#undef INCREMENT_MATCH_POS
+}
+
+void
+mark_text_in_line(PyObject *marker, Line *line) {
+    if (!marker) {
+        for (index_type i = 0; i < line->xnum; i++)  line->gpu_cells[i].attrs &= ATTRS_MASK_WITHOUT_MARK;
+        return;
+    }
+    PyObject *text = line_as_unicode(line);
+    if (PyUnicode_GET_LENGTH(text) > 0) {
+        apply_marker(marker, line, text);
+    } else {
+        for (index_type i = 0; i < line->xnum; i++)  line->gpu_cells[i].attrs &= ATTRS_MASK_WITHOUT_MARK;
+    }
+    Py_DECREF(text);
+}
+
 // Boilerplate {{{
 static PyObject*
 copy_char(Line* self, PyObject *args);

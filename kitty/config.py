@@ -241,6 +241,38 @@ def disable_ligatures_in(func, rest):
     return func, [where, strategy]
 
 
+@func_with_args('toggle_marker')
+def toggle_marker(func, rest):
+    parts = rest.split(maxsplit=1)
+    if len(parts) != 2:
+        raise ValueError('{} if not a valid marker specification'.format(rest))
+    ftype, spec = parts
+    flags = re.UNICODE
+    if ftype in ('text', 'itext', 'regex', 'iregex'):
+        parts = spec.split()
+        if ftype.startswith('i'):
+            flags |= re.IGNORECASE
+        if not parts or len(parts) % 2 != 0:
+            raise ValueError('No color specified in marker: {}'.format(spec))
+        ans = []
+        for i in range(0, len(parts), 2):
+            try:
+                color = max(1, min(int(parts[i]), 3))
+            except Exception:
+                raise ValueError('color {} in marker specification is not an integer'.format(parts[i]))
+            spec = parts[i + 1]
+            if 'regex' not in ftype:
+                spec = re.escape(spec)
+            ans.append((color, spec))
+        ftype = 'regex'
+        spec = tuple(ans)
+    elif ftype == 'function':
+        pass
+    else:
+        raise ValueError('Unknown marker type: {}'.format(ftype))
+    return func, [ftype, spec, flags]
+
+
 def parse_key_action(action):
     parts = action.strip().split(maxsplit=1)
     func = parts[0]
@@ -251,8 +283,8 @@ def parse_key_action(action):
     if parser is not None:
         try:
             func, args = parser(func, rest)
-        except Exception:
-            log_error('Ignoring invalid key action: {}'.format(action))
+        except Exception as err:
+            log_error('Ignoring invalid key action: {} with err: {}'.format(action, err))
         else:
             return KeyAction(func, args)
 
